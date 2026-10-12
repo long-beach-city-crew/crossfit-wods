@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% macro wod_card(wod, label, kind) %}
+<a class="card wod-card {{ kind }}" href="/wod/{{ wod.id }}">
+  <p class="eyebrow">{{ label }}</p>
+  <h2>{{ wod.title }}</h2>
+  {% if wod.rest %}
+  <p>Rest day.</p>
+  {% elif wod.sections %}
+  <ul>
+    {% for section in wod.sections %}<li>{{ section }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</a>
+{% endmacro %}
+
+{% block content %}
+<p class="muted">{{ done_count }} of {{ total }} workouts done</p>
+
+{% if previous %}{{ wod_card(previous, "Previous", "previous") }}{% endif %}
+
+{% if current %}
+{{ wod_card(current, "Current", "current") }}
+{% else %}
+<section class="card current">
+  <h2>All done!</h2>
+  <p>Every workout in the program is marked as done.</p>
+</section>
+{% endif %}
+
+{% if next %}{{ wod_card(next, "Next", "next") }}{% endif %}
+{% endblock %}

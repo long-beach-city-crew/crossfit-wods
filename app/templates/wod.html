@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ wod.title }} · CrossFit WODs{% endblock %}
+{% block content %}
+<article class="card wod">
+  {{ wod.html | safe }}
+</article>
+
+<div class="actions">
+  <div>
+    {% if wod.desc_html %}
+    <button type="button" class="secondary" aria-controls="desc" aria-expanded="false"
+            onclick="const d = document.getElementById('desc'); d.hidden = !d.hidden; this.setAttribute('aria-expanded', !d.hidden)">
+      Description
+    </button>
+    {% endif %}
+  </div>
+  <a class="button secondary" href="/">Home</a>
+  <form method="post" action="/wod/{{ wod.id }}">
+    {% if done_at %}
+    <button type="submit" class="secondary" title="Done {{ done_at }} UTC">Mark not done</button>
+    {% else %}
+    <input type="hidden" name="done" value="true">
+    <button type="submit">Done</button>
+    {% endif %}
+  </form>
+</div>
+
+{% if wod.desc_html %}
+<article id="desc" class="card wod" hidden>
+  {{ wod.desc_html | safe }}
+</article>
+{% endif %}
+{% endblock %}
