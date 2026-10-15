@@ -27,3 +27,6 @@ jobs:
     steps:
       - name: Deploy
         uses: long-beach-city-crew/deploy@main
+        with:
+          api_host: ${{ secrets.API_HOST }}
+          api_key: ${{ secrets.API_KEY }}
