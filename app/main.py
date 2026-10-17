@@ -176,3 +176,5 @@ def history(request: Request, conn: Db, user: User):
     done = db.done_wods(conn, user["id"])
     past = [(w, done[w.id]) for w in reversed(WODS) if w.id in done]
     return templates.TemplateResponse(request, "history.html", {"user": user, "past": past})
+
+# ----- end -----
