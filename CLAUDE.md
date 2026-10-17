@@ -46,7 +46,7 @@ Stack: FastAPI, server-rendered Jinja2 templates, HTMX (`hx-boost` only, `htmx.o
   - `/` home: three cards, each wholly clickable (hover/tap highlights it) — Previous, Current, Next. Current is the first workout in program order the user has not marked done (rest days included, they are marked done like any other); Previous/Next are its neighbours in program order. Shows "N of 371 workouts done". "All done!" when nothing is left.
   - `/wod/{week}/{day}`: the workout, then a button row — Description (left; toggles the Bulgarian text below the row via `data-toggle`), Home (middle), Done / Mark not done (right; POSTs and returns home).
   - `/history`: done workouts, newest in program order first, each with an Unmark button.
-  - POST `/wod/{week}/{day}` sets done from the `done` form field and redirects to the `next` field (local paths only) or `/`.
+  - POST `/wod/{week}/{day}` sets done from the `done` form field and redirects to `/history` when the `next` field is `/history`, else `/`.
 - **Tests** — `tests/test_app.py` points `db.DB_PATH` at a temp file per test and covers content loading, login/register, closed registration, login throttling, cross-site POST refusal, security headers, the home cards, marking/unmarking, per-user isolation, 404s and the redirect guard. Keep them passing when changing behaviour.
 
 Known gaps: login throttling is per process and resets on restart; sessions are stateless cookies, so logout cannot revoke a stolen cookie before it expires (14 days). Serve it behind HTTPS with `SESSION_HTTPS_ONLY=1` if exposed publicly.
