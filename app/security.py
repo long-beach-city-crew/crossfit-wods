@@ -22,6 +22,10 @@ def verify_password(password: str, stored: str) -> bool:
     return hmac.compare_digest(candidate.hex(), digest)
 
 
+# Checked against when the email is unknown, so a failed login takes the same time either way.
+DUMMY_HASH = hash_password(secrets.token_urlsafe(16))
+
+
 def secret_key() -> str:
     """SECRET_KEY from the environment, else one generated once and kept in instance/."""
     if key := os.environ.get("SECRET_KEY"):

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db
+from app import db, main
 from app.content import WODS
 from app.main import app
 
@@ -9,6 +9,7 @@ from app.main import app
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "test.db")
+    monkeypatch.setattr(main, "login_failures", {})
     with TestClient(app) as c:
         yield c
 
@@ -33,7 +34,7 @@ def test_pages_require_login(client):
 
 def test_register_login_logout(client):
     assert register(client).url.path == "/"
-    assert register(client).status_code == 400  # duplicate email, client still logged in
+    assert register(client).status_code == 403  # registration closes after the first account
     client.post("/logout")
     assert client.post("/login", data={"email": "me@example.com", "password": "wrong-pass"}).status_code == 400
     r = client.post("/login", data={"email": "ME@example.com ", "password": "secret123"})
@@ -78,7 +79,51 @@ def test_mark_done_advances_and_unmark_from_history(client):
     assert "W01 – Monday" in client.get("/").text
 
 
-def test_progress_is_per_user(client):
+def test_registration_closed_after_first_user(client, monkeypatch):
+    register(client)
+    client.post("/logout")
+    assert "Registration is closed." in client.get("/register").text
+    assert register(client, "b@example.com").status_code == 403
+    monkeypatch.setenv("ALLOW_REGISTRATION", "1")
+    assert register(client, "me@example.com").status_code == 400  # duplicate email
+    assert register(client, "b@example.com").url.path == "/"
+
+
+def test_registration_capped_at_max_users(client, monkeypatch):
+    monkeypatch.setenv("ALLOW_REGISTRATION", "1")
+    monkeypatch.setattr(main, "MAX_USERS", 2)
+    assert register(client, "a@example.com").url.path == "/"
+    assert register(client, "b@example.com").url.path == "/"
+    assert register(client, "c@example.com").status_code == 403
+
+
+def test_login_throttled_after_repeated_failures(client):
+    register(client)
+    client.post("/logout")
+    for _ in range(main.MAX_LOGIN_FAILURES):
+        assert client.post("/login", data={"email": "me@example.com", "password": "wrong-pass"}).status_code == 400
+    r = client.post("/login", data={"email": "me@example.com", "password": "secret123"})
+    assert r.status_code == 429
+
+
+def test_cross_site_post_refused(client):
+    register(client)
+    form = {"done": "true"}
+    assert client.post("/wod/W01/1-monday", data=form, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert client.post("/wod/W01/1-monday", data=form, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert "0 of 371" in client.get("/").text
+    r = client.post("/wod/W01/1-monday", data=form, headers={"Sec-Fetch-Site": "same-origin"})
+    assert "1 of 371" in r.text
+
+
+def test_security_headers(client):
+    r = client.get("/login")
+    assert r.headers["x-frame-options"] == "DENY"
+    assert "default-src 'self'" in r.headers["content-security-policy"]
+
+
+def test_progress_is_per_user(client, monkeypatch):
+    monkeypatch.setenv("ALLOW_REGISTRATION", "1")
     register(client, "a@example.com")
     client.post("/wod/W01/1-monday", data={"done": "true"})
     client.post("/logout")

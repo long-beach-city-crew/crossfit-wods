@@ -20,9 +20,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
           cache: pip
@@ -36,10 +36,12 @@ jobs:
 
   deploy:
     needs: test
+    # Only deploy main itself, never a pull request's code.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Deploy
-        uses: long-beach-city-crew/deploy@main
+        uses: long-beach-city-crew/deploy@dc5e3b5e6f2ba2876734fe43b2d41e44ee4e61d4 # main
         with:
           api_host: ${{ secrets.API_HOST }}
           api_key: ${{ secrets.API_KEY }}

@@ -57,6 +57,10 @@ def create_user(conn: sqlite3.Connection, email: str, password_hash: str) -> int
     return cur.lastrowid
 
 
+def user_count(conn: sqlite3.Connection) -> int:
+    return conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+
+
 def user_by_email(conn: sqlite3.Connection, email: str) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
 

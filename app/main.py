@@ -1,22 +1,38 @@
 """FastAPI app: email/password login, next workout, workout page, history."""
 
+import os
 import sqlite3
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import db
 from app.content import WODS, WODS_BY_ID, Wod
-from app.security import hash_password, secret_key, verify_password
+from app.security import DUMMY_HASH, hash_password, secret_key, verify_password
 
 APP_DIR = Path(__file__).resolve().parent
 MIN_PASSWORD_LENGTH = 8
+MAX_USERS = int(os.environ.get("MAX_USERS", 10))
+# Failed logins per email allowed within LOGIN_WINDOW seconds before that email is locked out.
+MAX_LOGIN_FAILURES = 5
+LOGIN_WINDOW = 15 * 60
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+}
+
+
+def env_flag(name: str) -> bool:
+    return os.environ.get(name, "").lower() in {"1", "true", "yes"}
 
 
 @asynccontextmanager
@@ -26,11 +42,38 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=secret_key(), same_site="lax")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=secret_key(),
+    same_site="lax",
+    # Set SESSION_HTTPS_ONLY=1 when served over HTTPS so the cookie never travels in clear.
+    https_only=env_flag("SESSION_HTTPS_ONLY"),
+)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=APP_DIR / "templates")
 
 Db = Annotated[sqlite3.Connection, Depends(db.get_db)]
+
+
+@app.middleware("http")
+async def protect(request: Request, call_next):
+    # CSRF: browsers tag every request with Sec-Fetch-Site (older ones with Origin); refuse
+    # state-changing requests that come from another site. Non-browser clients send neither.
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        site = request.headers.get("sec-fetch-site")
+        origin = request.headers.get("origin")
+        if site is not None:
+            allowed = site in {"same-origin", "none"}
+        elif origin is not None:
+            allowed = origin == f"{request.url.scheme}://{request.url.netloc}"
+        else:
+            allowed = True
+        if not allowed:
+            return PlainTextResponse("Cross-site request refused", status_code=403)
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 
 def current_user(request: Request, conn: Db) -> sqlite3.Row:
@@ -57,6 +100,24 @@ def redirect(url: str) -> RedirectResponse:
     return RedirectResponse(safe_url, status_code=303)
 
 
+def registration_open(conn: sqlite3.Connection) -> bool:
+    """The first account can always be created; more only with ALLOW_REGISTRATION=1, up to MAX_USERS."""
+    count = db.user_count(conn)
+    return count < MAX_USERS and (count == 0 or env_flag("ALLOW_REGISTRATION"))
+
+
+# email -> monotonic times of recent failed logins (in memory: resets on restart).
+login_failures: dict[str, list[float]] = {}
+
+
+def recent_failures(email: str) -> int:
+    cutoff = time.monotonic() - LOGIN_WINDOW
+    failures = [t for t in login_failures.pop(email, []) if t > cutoff]
+    if failures:
+        login_failures[email] = failures
+    return len(failures)
+
+
 def log_in(request: Request, user_id: int) -> None:
     request.session.clear()
     request.session["user_id"] = user_id
@@ -66,8 +127,10 @@ def log_in(request: Request, user_id: int) -> None:
 
 
 @app.get("/register")
-def register_form(request: Request):
-    return templates.TemplateResponse(request, "register.html")
+def register_form(request: Request, conn: Db):
+    return templates.TemplateResponse(
+        request, "register.html", {"closed": not registration_open(conn)}
+    )
 
 
 @app.post("/register")
@@ -78,6 +141,10 @@ def register(
     password: Annotated[str, Form()],
     password_confirm: Annotated[str, Form()],
 ):
+    if not registration_open(conn):
+        return templates.TemplateResponse(
+            request, "register.html", {"closed": True}, status_code=403
+        )
     email = email.strip().lower()
     error = None
     if "@" not in email:
@@ -111,14 +178,24 @@ def login(
     password: Annotated[str, Form()],
 ):
     email = email.strip().lower()
+    if recent_failures(email) >= MAX_LOGIN_FAILURES:
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"error": "Too many failed attempts. Try again later.", "email": email},
+            status_code=429,
+        )
     user = db.user_by_email(conn, email)
-    if user is None or not verify_password(password, user["password_hash"]):
+    password_ok = verify_password(password, user["password_hash"] if user else DUMMY_HASH)
+    if user is None or not password_ok:
+        login_failures.setdefault(email, []).append(time.monotonic())
         return templates.TemplateResponse(
             request,
             "login.html",
             {"error": "Wrong email or password.", "email": email},
             status_code=400,
         )
+    login_failures.pop(email, None)
     log_in(request, user["id"])
     return redirect("/")
 

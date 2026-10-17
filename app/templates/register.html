@@ -4,12 +4,16 @@
 <section class="card narrow">
   <h1>Register</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if closed %}
+  <p class="muted">Registration is closed.</p>
+  {% else %}
   <form method="post" action="/register">
     <label>Email <input type="email" name="email" value="{{ email or '' }}" required autofocus autocomplete="email"></label>
     <label>Password <input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
     <label>Confirm password <input type="password" name="password_confirm" required minlength="8" autocomplete="new-password"></label>
     <button type="submit">Create account</button>
   </form>
+  {% endif %}
   <p class="muted">Already registered? <a href="/login">Log in</a></p>
 </section>
 {% endblock %}

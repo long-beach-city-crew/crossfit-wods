@@ -135,6 +135,11 @@ On Linux, use:
 
 ## Security note
 
-Registration is open to anyone who can reach the app, and the app does not currently use CSRF tokens. Keep it restricted to local/private access until those protections are addressed. For public deployment, put it behind HTTPS and a properly configured reverse proxy, and address open registration and CSRF protection before making it reachable from the Internet.
+- Only the first account can register. To allow more, start the app with `ALLOW_REGISTRATION=1`, register them, then restart without it.
+- The app holds at most 10 accounts (`MAX_USERS` to change it); registration closes once that many exist, even with `ALLOW_REGISTRATION=1`.
+- Cross-site form posts are refused (CSRF), and every response carries a strict Content-Security-Policy and anti-framing headers.
+- Five failed logins for one email within 15 minutes lock that email out until the window passes or the app restarts.
+- When serving over HTTPS, set `SESSION_HTTPS_ONLY=1` so the session cookie is never sent over plain HTTP, and run Uvicorn with `--proxy-headers` behind the reverse proxy.
+- Keep `SECRET_KEY` (or `instance/secret_key`) private. Anyone holding it can forge a login for any user.
 
 ## test

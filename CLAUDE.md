@@ -36,19 +36,20 @@ Python 3.14 on Windows. No lint/format tooling is set up.
 
 ## The app
 
-Stack: FastAPI, server-rendered Jinja2 templates, HTMX (`hx-boost` only, loaded from unpkg, pinned `htmx.org@2.0.4`), stdlib `sqlite3` and `hashlib.scrypt`, `markdown` for rendering. No ORM, no JS build step; interactions are plain HTML forms that POST and redirect (303).
+Stack: FastAPI, server-rendered Jinja2 templates, HTMX (`hx-boost` only, `htmx.org@2.0.4` vendored as `app/static/htmx.min.js`), stdlib `sqlite3` and `hashlib.scrypt`, `markdown` for rendering. No ORM, no JS build step; interactions are plain HTML forms that POST and redirect (303).
 
 - **Content** — `app/content.py` loads every `data/W*/wods/*.md` plus its `desc/` twin once at import, sorted by week then file name, and pre-renders both to HTML. A workout's id is `W01/1-monday`, which is also its URL (`/wod/W01/1-monday`); unknown ids 404. Restart the server after editing `data/` (`--reload` only watches code).
 - **Storage** — `app/db.py`, SQLite at `instance/app.db`, schema created on startup (`CREATE TABLE IF NOT EXISTS`, no migrations yet): `users` (`email` unique, lower-cased; `password_hash`) and `progress` (`user_id`, `wod_id`, `done_at` UTC; a row means done). Progress lives only here — the app never reads or writes the `done:` frontmatter.
-- **Auth** — email + password, no email confirmation (a deliberate decision). Open `/register` page (min 8-char password), `/login`, POST `/logout`. Session is Starlette's signed cookie (`SameSite=Lax`) holding `user_id`; `current_user` dependency redirects to `/login` when missing. Signing key: `SECRET_KEY` env var, else generated once into `instance/secret_key`.
+- **Auth** — email + password, no email confirmation (a deliberate decision). `/register` (min 8-char password) is open only while there are no users, or when `ALLOW_REGISTRATION=1`, and never beyond `MAX_USERS` accounts (default 10); `/login`, POST `/logout`. Five failed logins for an email within 15 minutes lock it out (in memory, 429). Session is Starlette's signed cookie (`SameSite=Lax`, `Secure` when `SESSION_HTTPS_ONLY=1`) holding `user_id`; `current_user` dependency redirects to `/login` when missing. Signing key: `SECRET_KEY` env var, else generated once into `instance/secret_key`.
+- **Hardening** — the `protect` middleware in `main.py` refuses cross-site POSTs (CSRF, via `Sec-Fetch-Site`, falling back to `Origin`) and adds security headers, including a CSP of `default-src 'self'`. So no inline scripts, inline styles or third-party URLs in templates: put JS in `app/static/app.js` (the Description toggle is a delegated `data-toggle` click handler there).
 - **Pages**
   - `/` home: three cards, each wholly clickable (hover/tap highlights it) — Previous, Current, Next. Current is the first workout in program order the user has not marked done (rest days included, they are marked done like any other); Previous/Next are its neighbours in program order. Shows "N of 371 workouts done". "All done!" when nothing is left.
-  - `/wod/{week}/{day}`: the workout, then a button row — Description (left; toggles the Bulgarian text below the row via a small inline `onclick`), Home (middle), Done / Mark not done (right; POSTs and returns home).
+  - `/wod/{week}/{day}`: the workout, then a button row — Description (left; toggles the Bulgarian text below the row via `data-toggle`), Home (middle), Done / Mark not done (right; POSTs and returns home).
   - `/history`: done workouts, newest in program order first, each with an Unmark button.
   - POST `/wod/{week}/{day}` sets done from the `done` form field and redirects to the `next` field (local paths only) or `/`.
-- **Tests** — `tests/test_app.py` points `db.DB_PATH` at a temp file per test and covers content loading, login/register, the home cards, marking/unmarking, per-user isolation, 404s and the redirect guard. Keep them passing when changing behaviour.
+- **Tests** — `tests/test_app.py` points `db.DB_PATH` at a temp file per test and covers content loading, login/register, closed registration, login throttling, cross-site POST refusal, security headers, the home cards, marking/unmarking, per-user isolation, 404s and the redirect guard. Keep them passing when changing behaviour.
 
-Known gaps, acceptable while it runs locally for one user: registration is open to anyone who can reach the app, and there is no CSRF token (SameSite=Lax is the only protection). Address both before exposing it publicly.
+Known gaps: login throttling is per process and resets on restart; sessions are stateless cookies, so logout cannot revoke a stolen cookie before it expires (14 days). Serve it behind HTTPS with `SESSION_HTTPS_ONLY=1` if exposed publicly.
 
 ## The extracted data
 

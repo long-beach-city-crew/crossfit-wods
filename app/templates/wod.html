@@ -8,8 +8,7 @@
 <div class="actions">
   <div>
     {% if wod.desc_html %}
-    <button type="button" class="secondary" aria-controls="desc" aria-expanded="false"
-            onclick="const d = document.getElementById('desc'); d.hidden = !d.hidden; this.setAttribute('aria-expanded', !d.hidden)">
+    <button type="button" class="secondary" aria-controls="desc" aria-expanded="false" data-toggle="desc">
       Description
     </button>
     {% endif %}
