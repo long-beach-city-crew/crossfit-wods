@@ -17,7 +17,7 @@ app/
   db.py           SQLite schema and queries (users, progress)
   security.py     scrypt password hashing, session signing key
   templates/      Jinja2: base, login, register, home, wod, history
-  static/style.css
+  static/         style.css, app.js (page JS), htmx.min.js (vendored)
 tests/test_app.py pytest + FastAPI TestClient, temp DB per test
 instance/         runtime only: app.db, secret_key (created on first run)
 requirements.txt  pinned deps (incl. pytest/httpx for tests)
@@ -32,7 +32,7 @@ python -m venv .venv
 .venv\Scripts\python -m pytest -q
 ```
 
-Python 3.14 on Windows. No lint/format tooling is set up.
+Python 3.14, on Windows or Linux (on Linux use `.venv/bin/python`). No lint/format tooling is set up.
 
 ## The app
 
@@ -40,16 +40,18 @@ Stack: FastAPI, server-rendered Jinja2 templates, HTMX (`hx-boost` only, `htmx.o
 
 - **Content** — `app/content.py` loads every `data/W*/wods/*.md` plus its `desc/` twin once at import, sorted by week then file name, and pre-renders both to HTML. A workout's id is `W01/1-monday`, which is also its URL (`/wod/W01/1-monday`); unknown ids 404. Restart the server after editing `data/` (`--reload` only watches code).
 - **Storage** — `app/db.py`, SQLite at `instance/app.db`, schema created on startup (`CREATE TABLE IF NOT EXISTS`, no migrations yet): `users` (`email` unique, lower-cased; `password_hash`) and `progress` (`user_id`, `wod_id`, `done_at` UTC; a row means done). Progress lives only here — the app never reads or writes the `done:` frontmatter.
-- **Auth** — email + password, no email confirmation (a deliberate decision). `/register` (min 8-char password) is open only while there are no users, or when `ALLOW_REGISTRATION=1`, and never beyond `MAX_USERS` accounts (default 10); `/login`, POST `/logout`. Five failed logins for an email within 15 minutes lock it out (in memory, 429). Session is Starlette's signed cookie (`SameSite=Lax`, `Secure` when `SESSION_HTTPS_ONLY=1`) holding `user_id`; `current_user` dependency redirects to `/login` when missing. Signing key: `SECRET_KEY` env var, else generated once into `instance/secret_key`.
+- **Auth** — email + password, no email confirmation (a deliberate decision). `/register` (min 8-char password) is open only while there are no users, or when `ALLOW_REGISTRATION=1`, and never beyond `MAX_USERS` accounts (default 10); `/login`, POST `/logout`. Five failed logins for an email within 15 minutes lock it out (in memory, 429). Session is Starlette's signed cookie (`SameSite=Lax`, `Secure` when `SESSION_HTTPS_ONLY=1`) holding `user_id`; `current_user` dependency redirects to `/login` when missing. Signing key: `SECRET_KEY` env var (in production from `/etc/crossfit-wods.env`), else generated once into `instance/secret_key`. While registration is closed, `/register` shows a contact email instead of the form.
 - **Hardening** — the `protect` middleware in `main.py` refuses cross-site POSTs (CSRF, via `Sec-Fetch-Site`, falling back to `Origin`) and adds security headers, including a CSP of `default-src 'self'`. So no inline scripts, inline styles or third-party URLs in templates: put JS in `app/static/app.js` (the Description toggle is a delegated `data-toggle` click handler there).
 - **Pages**
   - `/` home: three cards, each wholly clickable (hover/tap highlights it) — Previous, Current, Next. Current is the first workout in program order the user has not marked done (rest days included, they are marked done like any other); Previous/Next are its neighbours in program order. Shows "N of 371 workouts done". "All done!" when nothing is left.
   - `/wod/{week}/{day}`: the workout, then a button row — Description (left; toggles the Bulgarian text below the row via `data-toggle`), Home (middle), Done / Mark not done (right; POSTs and returns home).
   - `/history`: done workouts, newest in program order first, each with an Unmark button.
-  - POST `/wod/{week}/{day}` sets done from the `done` form field and redirects to `/history` when the `next` field is `/history`, else `/`.
+  - POST `/wod/{week}/{day}` sets done from the `done` form field and redirects to `/history` when the `next` field is `/history`, else `/`. Keep redirect targets constant: CodeQL (`py/url-redirection`) flags any redirect built from request data, even validated.
 - **Tests** — `tests/test_app.py` points `db.DB_PATH` at a temp file per test and covers content loading, login/register, closed registration, login throttling, cross-site POST refusal, security headers, the home cards, marking/unmarking, per-user isolation, 404s and the redirect guard. Keep them passing when changing behaviour.
 
-Known gaps: login throttling is per process and resets on restart; sessions are stateless cookies, so logout cannot revoke a stolen cookie before it expires (14 days). Serve it behind HTTPS with `SESSION_HTTPS_ONLY=1` if exposed publicly.
+- **Deployment** — public, behind an HTTPS reverse proxy; Uvicorn runs under systemd on `127.0.0.1:8000` with `--proxy-headers` and settings from `/etc/crossfit-wods.env` (`SECRET_KEY`, `SESSION_HTTPS_ONLY=1`). `.github/workflows/main.yml` tests every push and PR and deploys pushes to `main`; actions are pinned to commit SHAs and the token is read-only. GitHub code scanning (CodeQL) runs on the repo.
+
+Known gaps: login throttling is per process and resets on restart; sessions are stateless cookies, so logout cannot revoke a stolen cookie before it expires (14 days); no password reset or 2FA.
 
 ## The extracted data
 
