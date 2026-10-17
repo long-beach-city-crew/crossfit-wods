@@ -2,6 +2,11 @@ name: Build and Deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        type: string
 
 jobs:
   test:
@@ -30,3 +35,4 @@ jobs:
         with:
           api_host: ${{ secrets.API_HOST }}
           api_key: ${{ secrets.API_KEY }}
+          target: ${{ inputs.target }}
