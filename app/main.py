@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.datastructures import URL
 from starlette.middleware.sessions import SessionMiddleware
 
 from app import db
@@ -96,7 +97,8 @@ def get_wod(week: str, day: str) -> Wod:
 
 
 def redirect(url: str) -> RedirectResponse:
-    safe_url = url if url.startswith("/") and not url.startswith("//") else "/"
+    normalized = url.replace("\\", "/")
+    safe_url = normalized if normalized.startswith("/") and URL(normalized).is_relative_url else "/"
     return RedirectResponse(safe_url, status_code=303)
 
 
@@ -245,8 +247,8 @@ def save_wod(
     next: Annotated[str, Form()] = "/",
 ):
     db.set_done(conn, user["id"], wod.id, done)
-    # Only local paths, so the form field cannot redirect off-site.
-    return redirect(next if next.startswith("/") and not next.startswith("//") else "/")
+    # Only local paths are allowed by redirect(), so the form field cannot redirect off-site.
+    return redirect(next)
 
 
 @app.get("/history")
