@@ -1,13 +1,11 @@
 """FastAPI app: email/password login, next workout, workout page, history."""
 
 import os
-import re
 import sqlite3
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
-from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse
@@ -22,10 +20,6 @@ from app.security import DUMMY_HASH, hash_password, secret_key, verify_password
 APP_DIR = Path(__file__).resolve().parent
 MIN_PASSWORD_LENGTH = 8
 MAX_USERS = int(os.environ.get("MAX_USERS", 10))
-# Redirect targets must be plain local paths.
-# Keep this pattern for conservative path characters; structural URL checks are done in
-# safe_local_redirect_target().
-LOCAL_PATH = re.compile(r"/(?!/)[\w\-/]*")
 # Failed logins per email allowed within LOGIN_WINDOW seconds before that email is locked out.
 MAX_LOGIN_FAILURES = 5
 LOGIN_WINDOW = 15 * 60
@@ -101,24 +95,8 @@ def get_wod(week: str, day: str) -> Wod:
     return wod
 
 
-def safe_local_redirect_target(url: str) -> str:
-    if not isinstance(url, str) or not url:
-        return "/"
-    # Browsers may treat "\" as "/" and tolerate control chars in odd ways; reject these.
-    if "\\" in url or any(ord(ch) < 32 for ch in url):
-        return "/"
-    if not url.startswith("/") or url.startswith("//"):
-        return "/"
-    parts = urlsplit(url)
-    if parts.scheme or parts.netloc:
-        return "/"
-    if not LOCAL_PATH.fullmatch(parts.path):
-        return "/"
-    return parts.path
-
-
 def redirect(url: str) -> RedirectResponse:
-    return RedirectResponse(safe_local_redirect_target(url), status_code=303)
+    return RedirectResponse(url, status_code=303)
 
 
 def registration_open(conn: sqlite3.Connection) -> bool:
@@ -266,7 +244,8 @@ def save_wod(
     next: Annotated[str, Form()] = "/",
 ):
     db.set_done(conn, user["id"], wod.id, done)
-    return redirect(next)
+    # Only known pages, so the form field never becomes the redirect URL itself.
+    return redirect("/history" if next == "/history" else "/")
 
 
 @app.get("/history")
