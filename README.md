@@ -136,3 +136,5 @@ On Linux, use:
 ## Security note
 
 Registration is open to anyone who can reach the app, and the app does not currently use CSRF tokens. Keep it restricted to local/private access until those protections are addressed. For public deployment, put it behind HTTPS and a properly configured reverse proxy, and address open registration and CSRF protection before making it reachable from the Internet.
+
+## test
