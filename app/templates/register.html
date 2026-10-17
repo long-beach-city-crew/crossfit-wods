@@ -5,7 +5,10 @@
   <h1>Register</h1>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if closed %}
-  <p class="muted">Registration is closed.</p>
+  <p>Registration is closed.</p>
+  <p>To request an account, please send an email to
+    <a href="mailto:aiden.takeda@proton.me">aiden.takeda@proton.me</a>.
+    Include the email address you want to log in with.</p>
   {% else %}
   <form method="post" action="/register">
     <label>Email <input type="email" name="email" value="{{ email or '' }}" required autofocus autocomplete="email"></label>
