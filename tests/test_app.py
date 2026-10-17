@@ -134,5 +134,6 @@ def test_progress_is_per_user(client, monkeypatch):
 def test_unknown_wod_and_offsite_redirect(client):
     register(client)
     assert client.get("/wod/W99/1-monday").status_code == 404
-    r = client.post("/wod/W01/1-monday", data={"done": "true", "next": "//evil.example"}, follow_redirects=False)
-    assert r.headers["location"] == "/"
+    for target in ["//evil.example", "/\\evil.example", "/\\/evil.example", "/\t/evil.example", "https://evil.example"]:
+        r = client.post("/wod/W01/1-monday", data={"done": "true", "next": target}, follow_redirects=False)
+        assert r.headers["location"] == "/", target
