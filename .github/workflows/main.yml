@@ -1,12 +1,17 @@
 name: Build and Deploy
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'
   workflow_dispatch:
-    inputs:
-      target:
-        description: Deployment target
-        required: true
-        type: string
 
 jobs:
   test:
@@ -35,4 +40,4 @@ jobs:
         with:
           api_host: ${{ secrets.API_HOST }}
           api_key: ${{ secrets.API_KEY }}
-          target: ${{ inputs.target }}
+          target: ${{ secrets.TARGET }}
