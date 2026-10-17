@@ -53,7 +53,8 @@ def get_wod(week: str, day: str) -> Wod:
 
 
 def redirect(url: str) -> RedirectResponse:
-    return RedirectResponse(url, status_code=303)
+    safe_url = url if url.startswith("/") and not url.startswith("//") else "/"
+    return RedirectResponse(safe_url, status_code=303)
 
 
 def log_in(request: Request, user_id: int) -> None:
