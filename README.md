@@ -57,10 +57,10 @@ Install Python 3.14 and its `venv` support using your Linux distribution's packa
 Create a service account and prepare the app directory. Run these commands as an administrator, adjusting the project path if needed:
 
 ```sh
-sudo useradd --system --home-dir /opt/crossfit-wods --shell /usr/sbin/nologin crossfit-wods
-sudo chown -R root:root /opt/crossfit-wods
-sudo install -d -o crossfit-wods -g crossfit-wods /opt/crossfit-wods/instance
-cd /opt/crossfit-wods
+sudo useradd --system -m --shell /usr/sbin/nologin crossfit
+mkdir -p /app
+cd /app
+git clone https://github.com/long-beach-city-crew/crossfit-wods/.git
 sudo python3.14 -m venv .venv
 sudo .venv/bin/python -m pip install -r requirements.txt
 ```
