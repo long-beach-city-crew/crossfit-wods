@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths-ignore:
-      - '.github/**'
+      - ".github/**"
   pull_request:
     branches:
       - main
     paths-ignore:
-      - '.github/**'
+      - ".github/**"
   workflow_dispatch:
 
 permissions:
@@ -46,3 +46,20 @@ jobs:
           api_host: ${{ secrets.API_HOST }}
           api_key: ${{ secrets.API_KEY }}
           target: ${{ secrets.TARGET }}
+
+  summary:
+    needs: deploy
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create summary
+        shell: bash
+        run: |
+          {
+            echo "## Deploy Summary"
+            echo;
+            echo "- API Status: ${{ needs.deploy.outputs.api_status }} "
+            echo "- Deploy Status: ${{ needs.deploy.outputs.deploy_status }} "
+            echo;
+            echo "_Summary generated automatically._"
+          } >>"$GITHUB_STEP_SUMMARY"
