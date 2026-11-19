@@ -39,8 +39,12 @@ jobs:
     # Only deploy main itself, never a pull request's code.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    outputs:
+      api_status: ${{ steps.deploy.outputs.api_status }}
+      deploy_status: ${{ steps.deploy.outputs.deploy_status }}
     steps:
       - name: Deploy
+        id: deploy
         uses: long-beach-city-crew/deploy@main
         with:
           api_host: ${{ secrets.API_HOST }}
@@ -54,12 +58,17 @@ jobs:
     steps:
       - name: Create summary
         shell: bash
+        env:
+          API_STATUS: ${{ needs.deploy.outputs.api_status || 'n/a' }}
+          DEPLOY_STATUS: ${{ needs.deploy.outputs.deploy_status || 'n/a' }}
+          RESULT: ${{ needs.deploy.result }}
         run: |
           {
             echo "## Deploy Summary"
-            echo;
-            echo "- API Status: ${{ needs.deploy.outputs.api_status }} "
-            echo "- Deploy Status: ${{ needs.deploy.outputs.deploy_status }} "
-            echo;
+            echo
+            echo "- Job result: ${RESULT}"
+            echo "- API Status: ${API_STATUS}"
+            echo "- Deploy Status: ${DEPLOY_STATUS}"
+            echo
             echo "_Summary generated automatically._"
-          } >>"$GITHUB_STEP_SUMMARY"
+          } >> "$GITHUB_STEP_SUMMARY"
